@@ -3,10 +3,14 @@ extern crate serde_json;
 
 use kplayer_rust_wrap::kplayer;
 
-struct ShowFilename {}
+struct ShowFilename {
+    show_extension: bool,
+}
 impl ShowFilename {
     fn new() -> Self {
-        ShowFilename {}
+        ShowFilename {
+            show_extension: false,
+        }
     }
 }
 
@@ -18,19 +22,45 @@ impl kplayer::plugin::BasePlugin for ShowFilename {
         &mut self,
         _custom_args: std::collections::HashMap<String, String>,
     ) -> std::vec::Vec<std::string::String> {
+        for item in &_custom_args {
+            let log = format!("{}={}", item.0, item.1);
+            kplayer::util::os::print_log(kplayer::util::os::PrintLogLevel::DEBUG, &log);
+        }
+
+        // set arguments
+        if _custom_args.contains_key("show_extension") {
+            let value = &_custom_args["show_extension"];
+            if value == "true" || value == "1" {
+                self.show_extension = true;
+            }
+        }
+
         // get history message
         let history_message = kplayer::get_history_message(
             kplayer::proto::keys::EventMessageAction::EVENT_MESSAGE_ACTION_RESOURCE_CHECKED,
         );
 
-        let value: serde_json::Value = serde_json::from_str(history_message.as_str()).unwrap();
-        let path = value["resource"]["path"].as_str().unwrap();
+        let value: serde_json::Value;
+        let mut file_name = "none";
 
-        let file_name = std::path::Path::new(path)
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap();
+        if history_message != "history cannot be found" {
+            value = serde_json::from_str(history_message.as_str()).unwrap();
+            let path = value["resource"]["path"].as_str().unwrap();
+
+            if self.show_extension {
+                file_name = std::path::Path::new(path)
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+            } else {
+                file_name = std::path::Path::new(path)
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+            }
+        }
 
         // set arg
         let mut args: Vec<std::string::String> = Vec::new();
@@ -87,11 +117,21 @@ impl kplayer::plugin::BasePlugin for ShowFilename {
         if action == start_value {
             let value: serde_json::Value = serde_json::from_str(body.as_str()).unwrap();
             let path = value["resource"]["path"].as_str().unwrap();
-            let file_name = std::path::Path::new(path)
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap();
+            let file_name;
+
+            if self.show_extension {
+                file_name = std::path::Path::new(path)
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+            } else {
+                file_name = std::path::Path::new(path)
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+            }
 
             kplayer::util::core::update_args(String::from("text"), file_name.to_string()).unwrap();
         }
